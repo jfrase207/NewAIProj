@@ -1,4 +1,5 @@
 import numpy as np
+import array
 from collections import deque
 
 # keras and model related
@@ -100,8 +101,9 @@ class ExampleAgent():
         return self.rng.choice(np.where(arr == np.max(arr))[0])
 
     def _best_action(self, state):
-        q_vals = self.predict_single(state)
 
+        q_vals = self.predict_single(state)
+        
         return self._argmax_rand(q_vals)  # the action with the best Q-value
 
     def act(self, state, epsilon=1.0):
@@ -182,6 +184,13 @@ class ReplayMemory():
 
             state = states[:-1]
             state_next = states[1:]
+
+            
+            #for x in state:            
+            #    for y in x:                
+            #        thisArray = np.array(list(y))               
+            #    pass
+            #pass
 
             inputs[i, ...] = state.reshape(agent.state_shape)
             # we could make zeros but pointless.
