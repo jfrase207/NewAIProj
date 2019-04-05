@@ -56,9 +56,12 @@ class ExampleAgent():
         _quad = T.minimum(abs(diff), 1.0)
         _lin = abs(diff) - _quad
         loss = 0.5 * _quad ** 2 + _lin
-        loss = T.sum(loss)
-
+        loss = T.sum(loss)        
         return loss
+
+    def loss_max(self,y_true, y_pred):
+        from keras import backend as K
+        return K.max(K.abs(y_pred - y_true), axis=-1)
 
     def build_model(self):
 
@@ -185,12 +188,6 @@ class ReplayMemory():
             state = states[:-1]
             state_next = states[1:]
 
-            
-            #for x in state:            
-            #    for y in x:                
-            #        thisArray = np.array(list(y))               
-            #    pass
-            #pass
 
             inputs[i, ...] = state.reshape(agent.state_shape)
             # we could make zeros but pointless.
@@ -207,6 +204,28 @@ class ReplayMemory():
 
 def loop_play_forever(env, agent):
     # our forever play loop
+    try:
+        # slow it down
+        env.display_screen = True
+        env.force_fps = False
+
+        while True:
+            agent.start_episode()
+            episode_reward = 0.0
+            while env.game_over() == False:
+                state = env.getGameState()
+                reward, action = agent.act(state, epsilon=0.05)
+                episode_reward += reward
+
+            print ("Agent score {:0.1f} reward for episode.".format(episode_reward))
+            agent.end_episode()
+
+    except KeyboardInterrupt:
+        print ("Exiting out!")
+
+def loadedModel(env, agent):
+    # our forever play loop
+    
     try:
         # slow it down
         env.display_screen = True

@@ -6,8 +6,10 @@ from ple.games.flappybird import FlappyBird
 from keras.models import Sequential
 from keras.layers.core import Dense
 from keras.optimizers import SGD
+from keras.models import load_model
+from six.moves import cPickle
 
-from example_support import ExampleAgent, ReplayMemory, loop_play_forever
+from example_support import ExampleAgent, ReplayMemory, loop_play_forever, loadedModel
 
 
 class Agent(ExampleAgent):
@@ -30,8 +32,10 @@ class Agent(ExampleAgent):
         model.add(Dense(self.num_actions, activation="linear", init="he_uniform"))
 
         model.compile(loss=self.q_loss, optimizer=SGD(lr=self.lr))
-
         self.model = model
+
+    def load_model(self,fileName):
+        self.model = load_model(fileName, custom_objects={'q_loss': self.q_loss})
 
 
 def nv_state_preprocessor(state):
@@ -42,7 +46,7 @@ def nv_state_preprocessor(state):
     # taken by inspection of source code. Better way is on its way!
     max_values = np.array([128.0, 20.0, 128.0, 128.0])  
     
-    mvals = np.array([256, 10, 309.0, 90, 129, 453.0, 107, 207])
+    mvals = np.array([300, 20, 400.0, 200, 200, 500, 200, 300])
 
     
     state = list(state.values())/mvals
@@ -52,11 +56,12 @@ def nv_state_preprocessor(state):
     return state.flatten()
 
 if __name__ == "__main__":
+
     # this takes about 15 epochs to converge to something that performs decently.
     # feel free to play with the parameters below.
 
     # training parameters
-    num_epochs = 15
+    num_epochs = 25
     num_steps_train = 15000  # steps per epoch of training
     num_steps_test = 3000
     update_frequency = 4  # step frequency of model training/updates
@@ -79,18 +84,26 @@ if __name__ == "__main__":
 
     epsilon_rate = (epsilon - epsilon_min) / epsilon_steps
 
+    #PreTrained Model FileNames
+    flappy = 'flappybird.h5'
+
+
     # PLE takes our game and the state_preprocessor. It will process the state
     # for our agent.
     game = FlappyBird()
     env = PLE(game, fps=30, state_preprocessor=nv_state_preprocessor)
 
-    agent = Agent(env, batch_size, num_frames, frame_skip, lr,
-                  discount, rng, optimizer="sgd_nesterov")
-    agent.build_model()
+    agent = Agent(env, batch_size, num_frames, frame_skip, lr, discount, rng, optimizer="sgd_nesterov")    
 
     memory = ReplayMemory(max_memory_size, min_memory_size)
 
     env.init()
+
+    #agent.build_model()
+
+    agent.load_model(flappy)
+
+    loadedModel(env,agent)
 
     for epoch in range(1, num_epochs + 1):
         steps, num_episodes = 0, 0
@@ -163,5 +176,12 @@ if __name__ == "__main__":
 
         #print ("Test Epoch {:02d}: Best Reward {:0.3f} | Avg. Reward {:0.3f}".format(epoch, np.max(rewards), np.sum(rewards) / num_episodes))
 
-    print ("\nTraining complete. Will loop forever playing!")
+    print ("\nTraining complete. Will loop forever playing!")  
+    
+    agent.model.save('flappybird.h5')
+   
     loop_play_forever(env, agent)
+    
+
+
+    
