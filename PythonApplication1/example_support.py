@@ -57,6 +57,7 @@ class ExampleAgent():
         _lin = abs(diff) - _quad
         loss = 0.5 * _quad ** 2 + _lin
         loss = T.sum(loss)        
+        
         return loss
 
     def loss_max(self,y_true, y_pred):
@@ -101,20 +102,30 @@ class ExampleAgent():
 
     def _argmax_rand(self, arr):
         # picks a random index if there is a tie
-        return self.rng.choice(np.where(arr == np.max(arr))[0])
+        
+        
+        newArr = np.clip(arr,-1,1)      
+
+        if(newArr[0] <= 0 or newArr[0] > 0):
+            return self.rng.choice(np.where(newArr == np.max(newArr))[0])
+        else:
+            return None
+
+        
+        #return self.rng.choice(np.where(newArr == np.max(newArr))[0])
 
     def _best_action(self, state):
-
-        q_vals = self.predict_single(state)
         
+        q_vals = self.predict_single(state)            
+     
         return self._argmax_rand(q_vals)  # the action with the best Q-value
 
-    def act(self, state, epsilon=1.0):
+    def act(self, state, epsilon=1):
 
         self.state.append(state)
 
         action = self.rng.randint(0, self.num_actions)
-
+       
         if len(self.state) == self.num_frames:  # we havent seen enough frames
             _state = np.array(self.state)            
 
@@ -128,7 +139,7 @@ class ExampleAgent():
 
         reward = np.clip(reward, -1.0, 1.0)
 
-        return reward, action
+        return reward,action
 
     def start_episode(self, N=3):
         self.env.reset_game()  # reset

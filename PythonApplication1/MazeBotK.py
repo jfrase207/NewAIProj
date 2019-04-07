@@ -2,6 +2,7 @@ import numpy as np
 from ple import PLE  # our environment
 from ple.games.catcher import Catcher
 from ple.games.flappybird import FlappyBird
+from ple.games.raycastmaze import RaycastMaze
 
 from keras.models import Sequential
 from keras.layers.core import Dense
@@ -44,13 +45,14 @@ def nv_state_preprocessor(state):
         0,1 and -1,1.
     """
     # taken by inspection of source code. Better way is on its way!
-    max_values = np.array([128.0, 20.0, 128.0, 128.0])  
+    catcherMax = np.array([128.0, 20.0, 128.0, 128.0])  
     
-    mvals = np.array([300, 20, 400.0, 200, 200, 500, 200, 300])
+    flappyMax = np.array([390, 10, 309, 192, 292, 453, 192])
 
-    
-    state = list(state.values())/mvals
-   
+    rayMax = np.array([10,10,1,1,1,10,1])
+
+    state = np.array([list(state.values())])/catcherMax    
+          
     #state = np.array([state.values()])/ max_values
 
     return state.flatten()
@@ -61,8 +63,10 @@ if __name__ == "__main__":
     # feel free to play with the parameters below.
 
     # training parameters
-    num_epochs = 25
+    num_epochs = 30
     num_steps_train = 15000  # steps per epoch of training
+    num_steps_ep = 200
+    
     num_steps_test = 3000
     update_frequency = 4  # step frequency of model training/updates
 
@@ -71,12 +75,13 @@ if __name__ == "__main__":
     num_frames = 4  # number of frames in a 'state'
     frame_skip = 2
     # percentage of time we perform a random action, help exploration.
-    epsilon = 0.15
-    epsilon_steps = 30000  # decay steps
+    epsilon = 0.5
+    epsilon_steps = 3000  # decay steps
     epsilon_min = 0.1
     lr = 0.01
     discount = 0.95  # discount factor
     rng = np.random.RandomState(24)
+    
 
     # memory settings
     max_memory_size = 100000
@@ -84,14 +89,24 @@ if __name__ == "__main__":
 
     epsilon_rate = (epsilon - epsilon_min) / epsilon_steps
 
-    #PreTrained Model FileNames
-    flappy = 'flappybird.h5'
-
+    
+    rewardsVals = {
+                "positive": 1.0,
+                "negative": -0.01,
+                "tick": -0.0,
+                "loss": -5.0,
+                "win": 5.0
+            }
 
     # PLE takes our game and the state_preprocessor. It will process the state
     # for our agent.
-    game = FlappyBird()
-    env = PLE(game, fps=30, state_preprocessor=nv_state_preprocessor)
+    game = Catcher(128,128)
+
+    #game = FlappyBird()
+    #game = RaycastMaze()
+
+
+    env = PLE(game, fps=60, state_preprocessor=nv_state_preprocessor,reward_values=rewardsVals)
 
     agent = Agent(env, batch_size, num_frames, frame_skip, lr, discount, rng, optimizer="sgd_nesterov")    
 
@@ -99,43 +114,56 @@ if __name__ == "__main__":
 
     env.init()
 
-    #agent.build_model()
+    agent.build_model()
 
-    agent.load_model(flappy)
+    #PreTrained Model FileNames
+    flappyModel = 'flappybird.h5'
+    catcherModel = 'catcher.h5'
+    rayMazeModel = 'RayMaze.h5'
+
+    #Model save filename
+    saveName = rayMazeModel
+
+    
+
+    agent.load_model('catcher-MASTER.h5')
 
     loadedModel(env,agent)
-
+   
     for epoch in range(1, num_epochs + 1):
         steps, num_episodes = 0, 0
         losses, rewards = [], []
         env.display_screen = True
-
+        stepsPerEp = num_steps_ep
         # training loop
         while steps < num_steps_train:
             episode_reward = 0.0
             agent.start_episode()
-
-            while env.game_over() == False and steps < num_steps_train:
+            
+            
+            while env.game_over() == False and steps < num_steps_train: # and steps < stepsPerEp:
+                
                 state = env.getGameState()
-                reward, action = agent.act(state, epsilon=epsilon)
-                memory.add([state, action, reward, env.game_over()])
-
+                
+                reward, action = agent.act(state, epsilon=epsilon)                
+                memory.add([state, action, reward, env.game_over()])                
                 if steps % update_frequency == 0:
                     loss = memory.train_agent_batch(agent)
 
-                    if loss is not None:
-                        losses.append(loss)                        
+                    if loss is not None:  
+                        losses.append(loss)     
                         epsilon = max(epsilon_min, epsilon)
-                        
 
                 episode_reward += reward
                 steps += 1
-
+                
+                
             if num_episodes % 5 == 0:
                 print ("Episode {:01d}: Reward {:0.1f}".format(num_episodes, episode_reward))
-
-            rewards.append(episode_reward)
+            
+            rewards.append(episode_reward)            
             num_episodes += 1
+            stepsPerEp += num_steps_ep
             agent.end_episode()
 
         print ("\nTrain Epoch {:02d}: Epsilon {:0.4f} | Avg. Loss {:0.3f} | Avg. Reward {:0.3f}".format(epoch, epsilon, np.mean(losses), np.sum(rewards) / num_episodes))
@@ -145,40 +173,11 @@ if __name__ == "__main__":
 
         # display the screen
         env.display_screen = True
-
-        # slow it down so we can watch it fail!
-        #env.force_fps = False
-
-
-        ## testing loop
-        #while steps < num_steps_test:
-        #    episode_reward = 0.0
-        #    agent.start_episode()
-
-        #    while env.game_over() == False and steps < num_steps_test:
-        #        state = env.getGameState()
-        #        reward, action = agent.act(state, epsilon=0.05)
-
-        #        episode_reward += reward
-        #        steps += 1
-
-        #        # done watching after 500 steps.
-        #        if steps > 500:
-        #            env.force_fps = False
-        #            env.display_screen = False
-
-        #    if num_episodes % 5 == 0:
-        #        print ("Episode {:01d}: Reward {:0.1f}".format(num_episodes, episode_reward))
-
-        #    rewards.append(episode_reward)
-        #    num_episodes += 1
-        #    agent.end_episode()
-
-        #print ("Test Epoch {:02d}: Best Reward {:0.3f} | Avg. Reward {:0.3f}".format(epoch, np.max(rewards), np.sum(rewards) / num_episodes))
-
+        agent.model.save(saveName)     
+      
     print ("\nTraining complete. Will loop forever playing!")  
     
-    agent.model.save('flappybird.h5')
+    agent.model.save(saveName)
    
     loop_play_forever(env, agent)
     
